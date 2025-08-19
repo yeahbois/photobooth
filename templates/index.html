@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Camera with PNG Frame (1800x1200)</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #111;
+      color: white;
+      font-family: sans-serif;
+    }
+    .camera-container {
+      position: relative;
+      width: 900px;   /* preview size on screen (scaled down) */
+      height: 600px;  /* keeps 3:2 ratio (same as 1800x1200) */
+      overflow: hidden;
+      border-radius: 12px;
+    }
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover; /* crop + fill */
+    }
+    .frame {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none; /* overlay only */
+    }
+    button {
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 8px;
+      background: #0af;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="camera-container">
+    <video id="video" autoplay playsinline></video>
+    <img src="{{url_for('static', filename='frame.png')}}" class="frame" alt="Frame Overlay">
+  </div>
+
+  <button id="snap">📸 Take Snapshot</button>
+
+  <script>
+    const video = document.getElementById("video");
+    const snapBtn = document.getElementById("snap");
+
+    // Start camera
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 1920, height: 1080 }, // request HD (browser may adjust)
+          audio: false
+        });
+        video.srcObject = stream;
+      } catch (err) {
+        alert("Camera error: " + err.message);
+      }
+    }
+
+    // Take snapshot and download as 1800x1200
+    snapBtn.addEventListener("click", () => {
+  const canvas = document.createElement("canvas");
+  // 4x6 inch at 300 DPI → 1200 x 1800 pixels
+  canvas.width = 1800;
+  canvas.height = 1200;
+  const ctx = canvas.getContext("2d");
+
+  // draw video into canvas
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  // overlay the frame.png
+  const frame = new Image();
+  frame.src = "{{url_for('static', filename='frame.png')}}";
+  frame.onload = () => {
+    ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+
+    // turn canvas into data URL
+    const imgData = canvas.toDataURL("image/png");
+
+    // open in new window with print settings
+    const printWindow = window.open("", "_blank");
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print Snapshot</title>
+          <style>
+            @page {
+              size: 4in 6in;   /* force 4R paper size */
+              margin: 0;       /* no margin */
+            }
+            body {
+              margin: 0;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              height: 100%;
+            }
+            img {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+            }
+          </style>
+        </head>
+        <body>
+          <img src="${imgData}" />
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() { window.close(); };
+            };
+          <\/script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+});
+
+    startCamera();
+  </script>
+</body>
+</html>
